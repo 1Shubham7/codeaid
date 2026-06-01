@@ -1,0 +1,13 @@
+# Secrets
+.env
+
+# Go build output
+codeaid
+*.exe
+*.out
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
