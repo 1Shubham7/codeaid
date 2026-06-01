@@ -1,7 +1,7 @@
 package main
 
-import "fmt"
+import "github.com/1shubham7/codeaid/cmd"
 
 func main() {
-	fmt.Println("codeaid: coding agent")
+	cmd.Execute()
 }
