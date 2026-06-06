@@ -2,12 +2,16 @@ package agent
 
 import (
 	"context"
+	_ "embed"
 	"strings"
 
 	"github.com/1shubham7/codeaid/tools"
 	"github.com/anthropics/anthropic-sdk-go"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+//go:embed system_prompt.md
+var systemPromptText string
 
 // ResponseMsg is returned to the TUI as a tea.Msg once the full agentic loop completes.
 type ResponseMsg struct {
@@ -35,9 +39,7 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 				MaxTokens: 1024,
 				Messages:  msgs,
 				Tools:     tools.Definitions,
-				System: []anthropic.TextBlockParam{
-					{Text: "You are a coding agent.\n\nCRITICAL RULES — never break these:\n1. You have ZERO knowledge of the current real-world time or date. Your training data is static and you cannot know what time it is right now.\n2. Any time a user asks about the current time, date, day of the week, or time in any city or country, you MUST call the get_current_time tool BEFORE answering. No exceptions.\n3. Never guess, estimate, or make up a time or date. If you answer a time question without calling get_current_time, your answer will always be wrong."},
-				},
+				System:    []anthropic.TextBlockParam{{Text: systemPromptText}},
 			})
 			if err != nil {
 				return ResponseMsg{Err: err}
