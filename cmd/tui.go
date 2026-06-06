@@ -315,6 +315,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		for _, tc := range msg.ToolCalls {
 			m.entries = append(m.entries, entry{role: "tool", text: tc.Display})
+			if tc.Output != "" {
+				role := "exec-ok"
+				if tc.IsError {
+					role = "exec-err"
+				}
+				m.entries = append(m.entries, entry{role: role, text: tc.Output})
+			}
 		}
 		m.entries = append(m.entries, entry{role: "codeaid", text: msg.Reply})
 		m.messages = append(m.messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Reply)))
@@ -420,6 +427,10 @@ func (m tuiModel) View() string {
 				b.WriteString("you: " + e.text + "\n\n")
 			case "tool":
 				b.WriteString(styles.BlockToolCallStyle.Render("✓ "+e.text) + "\n\n")
+			case "exec-ok":
+				b.WriteString(styles.ExecOkStyle.Render(e.text) + "\n\n")
+			case "exec-err":
+				b.WriteString(styles.ExecErrStyle.Render(e.text) + "\n\n")
 			case "codeaid":
 				b.WriteString("codeaid: " + e.text + "\n\n")
 			case "meta":

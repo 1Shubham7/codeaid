@@ -32,5 +32,5 @@ var MiddleFinger = spinner.Spinner{
 		" 🖕        ",
 		"🖕         ",
     },
-    FPS: time.Second / 20,
+    FPS: time.Second / 10,
 }

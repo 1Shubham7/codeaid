@@ -22,6 +22,19 @@ var Definitions = []anthropic.ToolUnionParam{
 		},
 	}},
 	{OfTool: &anthropic.ToolParam{
+		Name:        "execute_code",
+		Description: anthropic.String("Executes a shell command and returns the exit code, stdout, and stderr. Times out after 30 seconds."),
+		InputSchema: anthropic.ToolInputSchemaParam{
+			Properties: map[string]any{
+				"command": map[string]any{
+					"type":        "string",
+					"description": "The shell command to execute.",
+				},
+			},
+			Required: []string{"command"},
+		},
+	}},
+	{OfTool: &anthropic.ToolParam{
 		Name:        "list_directory",
 		Description: anthropic.String("Lists the contents of a directory, returning directories and files separately. Defaults to the current working directory if no path is given."),
 		InputSchema: anthropic.ToolInputSchemaParam{
@@ -74,6 +87,12 @@ func Dispatch(name string, rawInput json.RawMessage) string {
 		}
 		json.Unmarshal(rawInput, &input)
 		return getCurrentTime(input.Timezone)
+	case "execute_code":
+		var input struct {
+			Command string `json:"command"`
+		}
+		json.Unmarshal(rawInput, &input)
+		return executeCode(input.Command)
 	case "list_directory":
 		var input struct {
 			Path string `json:"path"`

@@ -16,7 +16,9 @@ var systemPromptText string
 
 // ToolCall records a single tool invocation for display in the TUI.
 type ToolCall struct {
-	Display string // human-readable summary shown before Claude's reply
+	Display string
+	Output  string // non-empty for execute_code — the raw stdout/stderr/exit output
+	IsError bool   // true when exit code != 0
 }
 
 // ResponseMsg is returned to the TUI as a tea.Msg once the full agentic loop completes.
@@ -87,41 +89,53 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 			for _, tc := range toolCalls {
 				result := tools.Dispatch(tc.Name, tc.Input)
 				resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(tc.ID, result, false))
-				usedTools = append(usedTools, ToolCall{Display: toolSummary(tc.Name, tc.Input)})
+				usedTools = append(usedTools, toolSummary(tc.Name, tc.Input, result))
 			}
 			msgs = append(msgs, anthropic.NewUserMessage(resultBlocks...))
 		}
 	}
 }
 
-// toolSummary returns a short human-readable line for each tool call.
-func toolSummary(name string, rawInput json.RawMessage) string {
+// toolSummary builds the ToolCall shown in the TUI for each tool invocation.
+// result is the raw string returned by tools.Dispatch — used by execute_code
+// to carry output and determine success/failure.
+func toolSummary(name string, rawInput json.RawMessage, result string) ToolCall {
 	switch name {
+	case "execute_code":
+		var input struct {
+			Command string `json:"command"`
+		}
+		json.Unmarshal(rawInput, &input)
+		return ToolCall{
+			Display: "ran: " + input.Command,
+			Output:  result,
+			IsError: !strings.HasPrefix(result, "Exit Code: 0\n"),
+		}
 	case "list_directory":
 		var input struct {
 			Path string `json:"path"`
 		}
 		json.Unmarshal(rawInput, &input)
 		if input.Path == "" {
-			return "listed directory: ."
+			return ToolCall{Display: "listed directory: ."}
 		}
-		return "listed directory: " + input.Path
+		return ToolCall{Display: "listed directory: " + input.Path}
 	case "read_file":
 		var input struct {
 			Path string `json:"path"`
 		}
 		json.Unmarshal(rawInput, &input)
-		return "read file: " + input.Path
+		return ToolCall{Display: "read file: " + input.Path}
 	case "write_file":
 		var input struct {
 			Path string `json:"path"`
 		}
 		json.Unmarshal(rawInput, &input)
-		return "wrote file: " + input.Path
+		return ToolCall{Display: "wrote file: " + input.Path}
 	case "get_current_time":
-		return "fetched current time"
+		return ToolCall{Display: "fetched current time"}
 	default:
-		return "called tool: " + name
+		return ToolCall{Display: "called tool: " + name}
 	}
 }
 
