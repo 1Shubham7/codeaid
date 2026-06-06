@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"context"
+	
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/1shubham7/codeaid/agent"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -94,16 +95,6 @@ func saveHistory(messages []anthropic.MessageParam) {
 	}
 }
 
-func extractText(message *anthropic.Message) string {
-	var sb strings.Builder
-	for _, block := range message.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			sb.WriteString(text.Text)
-		}
-	}
-	return sb.String()
-}
-
 // --- TUI ---
 
 type tuiState int
@@ -135,15 +126,6 @@ var availableModels = []struct {
 	{string(anthropic.ModelClaudeHaiku4_5), "Fast & affordable"},
 	{string(anthropic.ModelClaudeSonnet4_6), "Balanced performance"},
 	{string(anthropic.ModelClaudeOpus4_8), "Most capable"},
-}
-
-type responseMsg struct {
-	reply        string
-	inputTokens  int64
-	outputTokens int64
-	modelUsed    string
-	stopReason   string
-	err          error
 }
 
 type entry struct {
@@ -282,7 +264,16 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.input.SetValue("")
+				if input == "exit" {
+					m.input.Blur()
+					m.state = stateMenu
+					return m, nil
+				}
 				if input == "clear" {
+					m.entries = []entry{}
+					return m, nil
+				}
+				if input == "clear history" {
 					m.messages = []anthropic.MessageParam{}
 					m.entries = []entry{}
 					m.historyCount = 0
@@ -293,7 +284,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, anthropic.NewUserMessage(anthropic.NewTextBlock(input)))
 				m.state = stateWaiting
 				m.errMsg = ""
-				return m, callAPI(m.client, m.messages)
+				return m, agent.CallAPI(m.client, m.messages, model)
 			}
 		}
 
@@ -301,23 +292,23 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.input.Width = msg.Width - 4
 
-	case responseMsg:
+	case agent.ResponseMsg:
 		m.state = stateCode
-		if msg.err != nil {
+		if msg.Err != nil {
 			m.messages = m.messages[:len(m.messages)-1]
 			m.entries = m.entries[:len(m.entries)-1]
-			m.errMsg = fmt.Sprintf("error: %v", msg.err)
+			m.errMsg = fmt.Sprintf("error: %v", msg.Err)
 			return m, nil
 		}
-		m.entries = append(m.entries, entry{role: "codeaid", text: msg.reply})
-		m.messages = append(m.messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.reply)))
+		m.entries = append(m.entries, entry{role: "codeaid", text: msg.Reply})
+		m.messages = append(m.messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Reply)))
 		saveHistory(m.messages)
 		if verbose {
 			m.entries = append(m.entries, entry{
 				role: "meta",
 				text: fmt.Sprintf("[model: %s | stop: %s | tokens in: %d, out: %d, total: %d]",
-					msg.modelUsed, msg.stopReason,
-					msg.inputTokens, msg.outputTokens, msg.inputTokens+msg.outputTokens),
+					msg.ModelUsed, msg.StopReason,
+					msg.InputTokens, msg.OutputTokens, msg.InputTokens+msg.OutputTokens),
 			})
 		}
 	}
@@ -335,7 +326,7 @@ func (m tuiModel) selectMenuItem() (tea.Model, tea.Cmd) {
 		m.entries = []entry{}
 		m.errMsg = ""
 		m.state = stateCode
-		m.input.Placeholder = "Ask anything...  (esc to go back)"
+		m.input.Placeholder = "Ask anything...  (exit: menu  clear: screen  clear history: new session)"
 		m.input.Focus()
 		return m, textinput.Blink
 	case 1: // Load History — placeholder
@@ -425,26 +416,6 @@ func (m tuiModel) View() string {
 	}
 
 	return b.String()
-}
-
-func callAPI(c anthropic.Client, messages []anthropic.MessageParam) tea.Cmd {
-	return func() tea.Msg {
-		resp, err := c.Messages.New(context.Background(), anthropic.MessageNewParams{
-			Model:     model,
-			MaxTokens: 1024,
-			Messages:  messages,
-		})
-		if err != nil {
-			return responseMsg{err: err}
-		}
-		return responseMsg{
-			reply:        extractText(resp),
-			inputTokens:  resp.Usage.InputTokens,
-			outputTokens: resp.Usage.OutputTokens,
-			modelUsed:    resp.Model,
-			stopReason:   string(resp.StopReason),
-		}
-	}
 }
 
 func runTUI() {
