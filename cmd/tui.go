@@ -153,7 +153,7 @@ func newTUI() tuiModel {
 	ti.CharLimit = 0
 
 	s := spinner.New()
-	s.Spinner = spinner.Globe
+	s.Spinner = styles.MiddleFinger
 	s.Style = styles.SpinnerStyle
 
 	m := tuiModel{input: ti, spin: s}

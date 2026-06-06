@@ -15,6 +15,3 @@ import (
 var ToolStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("2")). // ANSI green
 	Italic(true)
-
-var SpinnerStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("205")) // pink/magenta
