@@ -419,7 +419,7 @@ func (m tuiModel) View() string {
 			case "you":
 				b.WriteString("you: " + e.text + "\n\n")
 			case "tool":
-				b.WriteString(styles.ToolStyle.Render("✓ "+e.text) + "\n\n")
+				b.WriteString(styles.BlockToolCallStyle.Render("✓ "+e.text) + "\n\n")
 			case "codeaid":
 				b.WriteString("codeaid: " + e.text + "\n\n")
 			case "meta":
