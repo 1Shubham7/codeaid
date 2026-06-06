@@ -97,12 +97,27 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 // toolSummary returns a short human-readable line for each tool call.
 func toolSummary(name string, rawInput json.RawMessage) string {
 	switch name {
+	case "list_directory":
+		var input struct {
+			Path string `json:"path"`
+		}
+		json.Unmarshal(rawInput, &input)
+		if input.Path == "" {
+			return "listed directory: ."
+		}
+		return "listed directory: " + input.Path
 	case "read_file":
 		var input struct {
 			Path string `json:"path"`
 		}
 		json.Unmarshal(rawInput, &input)
-		return "successfully read the file contents for file: " + input.Path
+		return "read file: " + input.Path
+	case "write_file":
+		var input struct {
+			Path string `json:"path"`
+		}
+		json.Unmarshal(rawInput, &input)
+		return "wrote file: " + input.Path
 	case "get_current_time":
 		return "fetched current time"
 	default:

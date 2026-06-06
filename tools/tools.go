@@ -22,6 +22,18 @@ var Definitions = []anthropic.ToolUnionParam{
 		},
 	}},
 	{OfTool: &anthropic.ToolParam{
+		Name:        "list_directory",
+		Description: anthropic.String("Lists the contents of a directory, returning directories and files separately. Defaults to the current working directory if no path is given."),
+		InputSchema: anthropic.ToolInputSchemaParam{
+			Properties: map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "Path to the directory to list. Defaults to '.' if omitted.",
+				},
+			},
+		},
+	}},
+	{OfTool: &anthropic.ToolParam{
 		Name:        "read_file",
 		Description: anthropic.String("Reads and returns the contents of a file at the given path."),
 		InputSchema: anthropic.ToolInputSchemaParam{
@@ -32,6 +44,23 @@ var Definitions = []anthropic.ToolUnionParam{
 				},
 			},
 			Required: []string{"path"},
+		},
+	}},
+	{OfTool: &anthropic.ToolParam{
+		Name:        "write_file",
+		Description: anthropic.String("Writes content to a file at the given path, creating any missing parent directories."),
+		InputSchema: anthropic.ToolInputSchemaParam{
+			Properties: map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "The path to the file to write.",
+				},
+				"content": map[string]any{
+					"type":        "string",
+					"description": "The content to write to the file.",
+				},
+			},
+			Required: []string{"path", "content"},
 		},
 	}},
 }
@@ -45,12 +74,25 @@ func Dispatch(name string, rawInput json.RawMessage) string {
 		}
 		json.Unmarshal(rawInput, &input)
 		return getCurrentTime(input.Timezone)
+	case "list_directory":
+		var input struct {
+			Path string `json:"path"`
+		}
+		json.Unmarshal(rawInput, &input)
+		return listDirectory(input.Path)
 	case "read_file":
 		var input struct {
 			Path string `json:"path"`
 		}
 		json.Unmarshal(rawInput, &input)
 		return readFile(input.Path)
+	case "write_file":
+		var input struct {
+			Path    string `json:"path"`
+			Content string `json:"content"`
+		}
+		json.Unmarshal(rawInput, &input)
+		return writeFile(input.Path, input.Content)
 	default:
 		return fmt.Sprintf("unknown tool: %s", name)
 	}
