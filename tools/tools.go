@@ -21,6 +21,19 @@ var Definitions = []anthropic.ToolUnionParam{
 			},
 		},
 	}},
+	{OfTool: &anthropic.ToolParam{
+		Name:        "read_file",
+		Description: anthropic.String("Reads and returns the contents of a file at the given path."),
+		InputSchema: anthropic.ToolInputSchemaParam{
+			Properties: map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "The path to the file to read.",
+				},
+			},
+			Required: []string{"path"},
+		},
+	}},
 }
 
 // Dispatch routes a tool_use call from Claude to the right Go function.
@@ -32,6 +45,12 @@ func Dispatch(name string, rawInput json.RawMessage) string {
 		}
 		json.Unmarshal(rawInput, &input)
 		return getCurrentTime(input.Timezone)
+	case "read_file":
+		var input struct {
+			Path string `json:"path"`
+		}
+		json.Unmarshal(rawInput, &input)
+		return readFile(input.Path)
 	default:
 		return fmt.Sprintf("unknown tool: %s", name)
 	}

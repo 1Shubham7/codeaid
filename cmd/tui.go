@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/1shubham7/codeaid/agent"
+	"github.com/1shubham7/codeaid/styles"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -300,6 +300,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.errMsg = fmt.Sprintf("error: %v", msg.Err)
 			return m, nil
 		}
+		for _, tc := range msg.ToolCalls {
+			m.entries = append(m.entries, entry{role: "tool", text: tc.Display})
+		}
 		m.entries = append(m.entries, entry{role: "codeaid", text: msg.Reply})
 		m.messages = append(m.messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Reply)))
 		saveHistory(m.messages)
@@ -399,6 +402,8 @@ func (m tuiModel) View() string {
 			switch e.role {
 			case "you":
 				b.WriteString("you: " + e.text + "\n\n")
+			case "tool":
+				b.WriteString(styles.ToolStyle.Render("✓ "+e.text) + "\n\n")
 			case "codeaid":
 				b.WriteString("codeaid: " + e.text + "\n\n")
 			case "meta":

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"strings"
 
 	"github.com/1shubham7/codeaid/tools"
@@ -13,9 +14,15 @@ import (
 //go:embed system_prompt.md
 var systemPromptText string
 
+// ToolCall records a single tool invocation for display in the TUI.
+type ToolCall struct {
+	Display string // human-readable summary shown before Claude's reply
+}
+
 // ResponseMsg is returned to the TUI as a tea.Msg once the full agentic loop completes.
 type ResponseMsg struct {
 	Reply        string
+	ToolCalls    []ToolCall
 	InputTokens  int64
 	OutputTokens int64
 	ModelUsed    string
@@ -32,6 +39,7 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 		copy(msgs, messages)
 
 		var totalIn, totalOut int64
+		var usedTools []ToolCall
 
 		for {
 			resp, err := c.Messages.New(context.Background(), anthropic.MessageNewParams{
@@ -51,6 +59,7 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 			if resp.StopReason != anthropic.StopReasonToolUse {
 				return ResponseMsg{
 					Reply:        extractText(resp),
+					ToolCalls:    usedTools,
 					InputTokens:  totalIn,
 					OutputTokens: totalOut,
 					ModelUsed:    resp.Model,
@@ -73,14 +82,31 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 			}
 			msgs = append(msgs, anthropic.NewAssistantMessage(assistantBlocks...))
 
-			// Call each tool and send results back as a user turn
+			// Call each tool, record a display summary, collect results
 			var resultBlocks []anthropic.ContentBlockParamUnion
 			for _, tc := range toolCalls {
 				result := tools.Dispatch(tc.Name, tc.Input)
 				resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(tc.ID, result, false))
+				usedTools = append(usedTools, ToolCall{Display: toolSummary(tc.Name, tc.Input)})
 			}
 			msgs = append(msgs, anthropic.NewUserMessage(resultBlocks...))
 		}
+	}
+}
+
+// toolSummary returns a short human-readable line for each tool call.
+func toolSummary(name string, rawInput json.RawMessage) string {
+	switch name {
+	case "read_file":
+		var input struct {
+			Path string `json:"path"`
+		}
+		json.Unmarshal(rawInput, &input)
+		return "successfully read the file contents for file: " + input.Path
+	case "get_current_time":
+		return "fetched current time"
+	default:
+		return "called tool: " + name
 	}
 }
 
