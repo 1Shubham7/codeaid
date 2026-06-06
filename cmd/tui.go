@@ -12,6 +12,7 @@ import (
 	"github.com/1shubham7/codeaid/styles"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -138,6 +139,7 @@ type tuiModel struct {
 	cursor       int
 	modelCursor  int
 	input        textinput.Model
+	spin         spinner.Model
 	entries      []entry
 	messages     []anthropic.MessageParam
 	historyCount int
@@ -150,7 +152,11 @@ func newTUI() tuiModel {
 	ti := textinput.New()
 	ti.CharLimit = 0
 
-	m := tuiModel{input: ti}
+	s := spinner.New()
+	s.Spinner = spinner.Globe
+	s.Style = styles.SpinnerStyle
+
+	m := tuiModel{input: ti, spin: s}
 
 	if apiKey == "" {
 		m.state = stateAPIKey
@@ -270,23 +276,28 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if input == "clear" {
-					m.entries = []entry{}
+					m.entries = []entry{{role: "tool", text: "screen cleared"}}
 					return m, nil
 				}
 				if input == "clear history" {
 					m.messages = []anthropic.MessageParam{}
-					m.entries = []entry{}
 					m.historyCount = 0
 					saveHistory(m.messages)
+					m.entries = []entry{{role: "tool", text: "history cleared - starting a new session"}}
 					return m, nil
 				}
 				m.entries = append(m.entries, entry{role: "you", text: input})
 				m.messages = append(m.messages, anthropic.NewUserMessage(anthropic.NewTextBlock(input)))
 				m.state = stateWaiting
 				m.errMsg = ""
-				return m, agent.CallAPI(m.client, m.messages, model)
+				return m, tea.Batch(agent.CallAPI(m.client, m.messages, model), m.spin.Tick)
 			}
 		}
+
+	case spinner.TickMsg:
+		var spinCmd tea.Cmd
+		m.spin, spinCmd = m.spin.Update(msg)
+		return m, spinCmd
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -411,7 +422,7 @@ func (m tuiModel) View() string {
 			}
 		}
 		if m.state == stateWaiting {
-			b.WriteString("codeaid: thinking...\n\n")
+			b.WriteString("codeaid: " + m.spin.View() + " thinking...\n\n")
 		}
 		if m.errMsg != "" {
 			b.WriteString(m.errMsg + "\n\n")
