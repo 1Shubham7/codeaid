@@ -140,6 +140,7 @@ type tuiModel struct {
 	modelCursor  int
 	input        textinput.Model
 	spin         spinner.Model
+	logoStr      string
 	entries      []entry
 	messages     []anthropic.MessageParam
 	historyCount int
@@ -302,6 +303,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.input.Width = msg.Width - 4
+		m.logoStr = renderLogo(msg.Width)
 
 	case agent.ResponseMsg:
 		m.state = stateCode
@@ -378,6 +380,9 @@ func (m tuiModel) View() string {
 		b.WriteString("> " + m.input.View() + "\n")
 
 	case stateMenu:
+		if m.logoStr != "" {
+			b.WriteString(m.logoStr + "\n")
+		}
 		for i, item := range menuItems {
 			cursor := "  "
 			if i == m.cursor {
