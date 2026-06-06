@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"log"
 	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 )
@@ -14,23 +12,25 @@ var (
 	apiKey  string
 	model   string
 	verbose bool
-	client  anthropic.Client
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "codeaid",
 	Short: "A coding agent powered by Claude",
+	Run: func(cmd *cobra.Command, args []string) {
+		runTUI()
+	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if err := godotenv.Load(); err != nil {
-			log.Println("no .env file found, reading from environment directly")
-		}
+		godotenv.Load()
 		if apiKey == "" {
 			apiKey = os.Getenv("ANTHROPIC_API_KEY")
 		}
-		if apiKey == "" {
-			log.Fatal("ANTHROPIC_API_KEY is not set (use --api-key or set ANTHROPIC_API_KEY)")
+		// apply saved model from config unless --model was explicitly passed
+		if !cmd.Root().PersistentFlags().Changed("model") {
+			if cfg := loadConfig(); cfg.Model != "" {
+				model = cfg.Model
+			}
 		}
-		client = anthropic.NewClient(option.WithAPIKey(apiKey))
 	},
 }
 
