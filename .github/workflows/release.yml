@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binaries
+        run: |
+          GOOS=linux   GOARCH=amd64 go build -o dist/codeaid-linux-amd64       .
+          GOOS=darwin  GOARCH=amd64 go build -o dist/codeaid-darwin-amd64      .
+          GOOS=darwin  GOARCH=arm64 go build -o dist/codeaid-darwin-arm64      .
+          GOOS=windows GOARCH=amd64 go build -o dist/codeaid-windows-amd64.exe .
+
+      - name: Create release
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: false
+          files: |
+            dist/codeaid-linux-amd64
+            dist/codeaid-darwin-amd64
+            dist/codeaid-darwin-arm64
+            dist/codeaid-windows-amd64.exe
