@@ -4,12 +4,22 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/1shubham7/codeaid/tools"
 	"github.com/anthropics/anthropic-sdk-go"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// blockAccum holds the content accumulated for a single content block during streaming.
+type blockAccum struct {
+	blockType string // "text" or "tool_use"
+	text      strings.Builder
+	toolID    string
+	toolName  string
+	toolInput strings.Builder
+}
 
 //go:embed system_prompt.md
 var systemPromptText string
@@ -39,12 +49,13 @@ type ResponseMsg struct {
 	Err          error
 }
 
-// CallAPI runs the agentic loop in a goroutine. After each tool-use round-trip it sends
-// an IterationMsg on iterCh so the TUI can show per-call token counts live. The channel
-// is closed when the loop exits, signalling the TUI to stop listening.
-func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string, iterCh chan<- IterationMsg) tea.Cmd {
+// CallAPI runs the agentic loop in a goroutine. Text chunks are streamed to streamCh
+// as they arrive so the TUI can display them live. After each tool-use round-trip an
+// IterationMsg is sent on iterCh. Both channels are closed when the loop exits.
+func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string, iterCh chan<- IterationMsg, streamCh chan<- string) tea.Cmd {
 	return func() tea.Msg {
 		defer close(iterCh)
+		defer close(streamCh)
 
 		msgs := make([]anthropic.MessageParam, len(messages))
 		copy(msgs, messages)
@@ -53,47 +64,98 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 		var usedTools []ToolCall
 
 		for {
-			resp, err := c.Messages.New(context.Background(), anthropic.MessageNewParams{
+			stream := c.Messages.NewStreaming(context.Background(), anthropic.MessageNewParams{
 				Model:     model,
 				MaxTokens: 1024,
 				Messages:  msgs,
 				Tools:     tools.Definitions,
 				System:    []anthropic.TextBlockParam{{Text: systemPromptText}},
 			})
-			if err != nil {
+
+			// Accumulate content blocks keyed by their stream index.
+			blocks := make(map[int64]*blockAccum)
+			var iterIn, iterOut int64
+			var stopReason anthropic.StopReason
+			var modelUsed string
+
+			for stream.Next() {
+				event := stream.Current()
+				switch e := event.AsAny().(type) {
+				case anthropic.MessageStartEvent:
+					iterIn = e.Message.Usage.InputTokens
+					modelUsed = string(e.Message.Model)
+				case anthropic.ContentBlockStartEvent:
+					switch b := e.ContentBlock.AsAny().(type) {
+					case anthropic.TextBlock:
+						blocks[e.Index] = &blockAccum{blockType: "text"}
+					case anthropic.ToolUseBlock:
+						blocks[e.Index] = &blockAccum{blockType: "tool_use", toolID: b.ID, toolName: b.Name}
+					}
+				case anthropic.ContentBlockDeltaEvent:
+					blk := blocks[e.Index]
+					if blk == nil {
+						continue
+					}
+					switch d := e.Delta.AsAny().(type) {
+					case anthropic.TextDelta:
+						blk.text.WriteString(d.Text)
+						streamCh <- d.Text
+					case anthropic.InputJSONDelta:
+						blk.toolInput.WriteString(d.PartialJSON)
+					}
+				case anthropic.MessageDeltaEvent:
+					stopReason = e.Delta.StopReason
+					iterOut = e.Usage.OutputTokens
+				}
+			}
+
+			if err := stream.Err(); err != nil {
 				return ResponseMsg{Err: err}
 			}
 
-			totalIn += resp.Usage.InputTokens
-			totalOut += resp.Usage.OutputTokens
+			totalIn += iterIn
+			totalOut += iterOut
 
-			if resp.StopReason != anthropic.StopReasonToolUse {
+			// Rebuild the assistant turn in block-index order.
+			indices := make([]int64, 0, len(blocks))
+			for idx := range blocks {
+				indices = append(indices, idx)
+			}
+			sort.Slice(indices, func(i, j int) bool { return indices[i] < indices[j] })
+
+			var assistantBlocks []anthropic.ContentBlockParamUnion
+			var toolCalls []anthropic.ToolUseBlock
+			var replyText strings.Builder
+
+			for _, idx := range indices {
+				blk := blocks[idx]
+				switch blk.blockType {
+				case "text":
+					if blk.text.Len() > 0 {
+						assistantBlocks = append(assistantBlocks, anthropic.NewTextBlock(blk.text.String()))
+						replyText.WriteString(blk.text.String())
+					}
+				case "tool_use":
+					raw := json.RawMessage(blk.toolInput.String())
+					assistantBlocks = append(assistantBlocks, anthropic.NewToolUseBlock(blk.toolID, raw, blk.toolName))
+					toolCalls = append(toolCalls, anthropic.ToolUseBlock{ID: blk.toolID, Name: blk.toolName, Input: raw})
+				}
+			}
+
+			if stopReason != anthropic.StopReasonToolUse {
 				return ResponseMsg{
-					Reply:        extractText(resp),
+					Reply:        replyText.String(),
 					ToolCalls:    usedTools,
 					InputTokens:  totalIn,
 					OutputTokens: totalOut,
-					ModelUsed:    resp.Model,
-					StopReason:   string(resp.StopReason),
+					ModelUsed:    modelUsed,
+					StopReason:   string(stopReason),
 				}
 			}
 
-			// Claude wants to call tools — build the full assistant turn first
-			var assistantBlocks []anthropic.ContentBlockParamUnion
-			var toolCalls []anthropic.ToolUseBlock
-
-			for _, block := range resp.Content {
-				switch v := block.AsAny().(type) {
-				case anthropic.TextBlock:
-					assistantBlocks = append(assistantBlocks, anthropic.NewTextBlock(v.Text))
-				case anthropic.ToolUseBlock:
-					assistantBlocks = append(assistantBlocks, anthropic.NewToolUseBlock(v.ID, v.Input, v.Name))
-					toolCalls = append(toolCalls, v)
-				}
-			}
 			msgs = append(msgs, anthropic.NewAssistantMessage(assistantBlocks...))
 
-			// Call each tool, record a display summary, collect results
+			// Dispatch tools and collect results.
 			var resultBlocks []anthropic.ContentBlockParamUnion
 			for _, tc := range toolCalls {
 				result := tools.Dispatch(tc.Name, tc.Input)
@@ -102,11 +164,10 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 			}
 			msgs = append(msgs, anthropic.NewUserMessage(resultBlocks...))
 
-			// Notify the TUI about this iteration's token usage.
 			iterCh <- IterationMsg{
-				InputTokens:  resp.Usage.InputTokens,
-				OutputTokens: resp.Usage.OutputTokens,
-				StopReason:   string(resp.StopReason),
+				InputTokens:  iterIn,
+				OutputTokens: iterOut,
+				StopReason:   string(stopReason),
 			}
 		}
 	}
@@ -155,12 +216,3 @@ func toolSummary(name string, rawInput json.RawMessage, result string) ToolCall 
 	}
 }
 
-func extractText(message *anthropic.Message) string {
-	var sb strings.Builder
-	for _, block := range message.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			sb.WriteString(text.Text)
-		}
-	}
-	return sb.String()
-}

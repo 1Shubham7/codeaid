@@ -135,6 +135,8 @@ type entry struct {
 }
 
 type iterDoneMsg struct{}
+type streamChunkMsg string
+type streamDoneMsg struct{}
 
 func waitForIteration(ch <-chan agent.IterationMsg) tea.Cmd {
 	return func() tea.Msg {
@@ -146,6 +148,16 @@ func waitForIteration(ch <-chan agent.IterationMsg) tea.Cmd {
 	}
 }
 
+func waitForChunk(ch <-chan string) tea.Cmd {
+	return func() tea.Msg {
+		chunk, ok := <-ch
+		if !ok {
+			return streamDoneMsg{}
+		}
+		return streamChunkMsg(chunk)
+	}
+}
+
 type tuiModel struct {
 	state        tuiState
 	cursor       int
@@ -154,6 +166,8 @@ type tuiModel struct {
 	spin         spinner.Model
 	logoStr      string
 	iterCh       chan agent.IterationMsg
+	streamCh     chan string
+	streamBuf    string
 	entries      []entry
 	messages     []anthropic.MessageParam
 	historyCount int
@@ -304,11 +318,14 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, anthropic.NewUserMessage(anthropic.NewTextBlock(input)))
 				m.state = stateWaiting
 				m.errMsg = ""
+				m.streamBuf = ""
 				m.iterCh = make(chan agent.IterationMsg, 10)
+				m.streamCh = make(chan string, 100)
 				return m, tea.Batch(
-					agent.CallAPI(m.client, m.messages, model, m.iterCh),
+					agent.CallAPI(m.client, m.messages, model, m.iterCh, m.streamCh),
 					m.spin.Tick,
 					waitForIteration(m.iterCh),
+					waitForChunk(m.streamCh),
 				)
 			}
 		}
@@ -323,6 +340,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case iterDoneMsg:
 		return m, nil
 
+	case streamChunkMsg:
+		m.streamBuf += string(msg)
+		return m, waitForChunk(m.streamCh)
+
+	case streamDoneMsg:
+		return m, nil
+
 	case spinner.TickMsg:
 		var spinCmd tea.Cmd
 		m.spin, spinCmd = m.spin.Update(msg)
@@ -335,6 +359,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case agent.ResponseMsg:
 		m.state = stateCode
+		m.streamBuf = ""
 		if msg.Err != nil {
 			m.messages = m.messages[:len(m.messages)-1]
 			m.entries = m.entries[:len(m.entries)-1]
@@ -463,7 +488,11 @@ func (m tuiModel) View() string {
 			}
 		}
 		if m.state == stateWaiting {
-			b.WriteString("codeaid: " + m.spin.View() + " thinking...\n\n")
+			if m.streamBuf != "" {
+				b.WriteString("codeaid: " + m.streamBuf + m.spin.View() + "\n\n")
+			} else {
+				b.WriteString("codeaid: " + m.spin.View() + " thinking...\n\n")
+			}
 		}
 		if m.errMsg != "" {
 			b.WriteString(m.errMsg + "\n\n")
