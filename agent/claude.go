@@ -146,7 +146,11 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 						replyText.WriteString(blk.text.String())
 					}
 				case "tool_use":
-					raw := json.RawMessage(blk.toolInput.String())
+					inputStr := blk.toolInput.String()
+					if inputStr == "" {
+						inputStr = "{}"
+					}
+					raw := json.RawMessage(inputStr)
 					assistantBlocks = append(assistantBlocks, anthropic.NewToolUseBlock(blk.toolID, raw, blk.toolName))
 					toolCalls = append(toolCalls, anthropic.ToolUseBlock{ID: blk.toolID, Name: blk.toolName, Input: raw})
 				}

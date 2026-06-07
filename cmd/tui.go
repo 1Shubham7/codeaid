@@ -335,10 +335,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case agent.IterationMsg:
-		m.entries = append(m.entries, entry{
-			role: "meta",
-			text: fmt.Sprintf("[stop: %s | in: %d | out: %d]", msg.StopReason, msg.InputTokens, msg.OutputTokens),
-		})
+		if verbose {
+			m.entries = append(m.entries, entry{
+				role: "meta",
+				text: fmt.Sprintf("[stop: %s | in: %d | out: %d]", msg.StopReason, msg.InputTokens, msg.OutputTokens),
+			})
+		}
 		return m, waitForIteration(m.iterCh)
 
 	case iterDoneMsg:
@@ -383,11 +385,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.entries = append(m.entries, entry{role: "codeaid", text: msg.Reply})
 		m.messages = append(m.messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Reply)))
 		saveHistory(m.messages)
-		m.entries = append(m.entries, entry{
-			role: "meta",
-			text: fmt.Sprintf("[stop: %s | model: %s | total in: %d | total out: %d | total: %d]",
-				msg.StopReason, msg.ModelUsed, msg.InputTokens, msg.OutputTokens, msg.InputTokens+msg.OutputTokens),
-		})
+		if verbose {
+			m.entries = append(m.entries, entry{
+				role: "meta",
+				text: fmt.Sprintf("[stop: %s | model: %s | total in: %d | total out: %d | total: %d]",
+					msg.StopReason, msg.ModelUsed, msg.InputTokens, msg.OutputTokens, msg.InputTokens+msg.OutputTokens),
+			})
+		}
 	}
 
 	m.input, cmd = m.input.Update(msg)
@@ -430,7 +434,7 @@ func currentModelIndex() int {
 
 func (m tuiModel) View() string {
 	var b strings.Builder
-	sep := strings.Repeat("─", max(min(m.width, 100), 40))
+	sep := strings.Repeat("─", max(m.width, 40))
 
 	b.WriteString("codeaid\n")
 	b.WriteString(sep + "\n\n")
@@ -478,8 +482,7 @@ func (m tuiModel) View() string {
 		for _, e := range m.entries {
 			switch e.role {
 			case "you":
-				youWidth := max(min(m.width, 100), 40) - 2
-				b.WriteString(styles.YouBoxStyle.Width(youWidth).Render("you: "+e.text) + "\n\n")
+				b.WriteString(styles.YouBoxStyle.Width(max(m.width-2, 40)).Render("you: "+e.text) + "\n\n")
 			case "tool":
 				b.WriteString(styles.BlockToolCallStyle.Render("✓ "+e.text) + "\n\n")
 			case "exec-ok":
@@ -502,7 +505,7 @@ func (m tuiModel) View() string {
 		if m.errMsg != "" {
 			b.WriteString(m.errMsg + "\n\n")
 		}
-		inputWidth := max(min(m.width, 100), 40) - 4 // 4 accounts for border + padding
+		inputWidth := max(m.width-4, 40)
 		b.WriteString(styles.InputBoxStyle.Width(inputWidth).Render(m.input.View()))
 	}
 
