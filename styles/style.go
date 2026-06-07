@@ -38,7 +38,8 @@ var YouLabelStyle = lipgloss.NewStyle().
 
 var YouBoxStyle = lipgloss.NewStyle().
 	Background(lipgloss.Color("225")).
-	Foreground(lipgloss.Color("236")).
+	Foreground(lipgloss.Color("22")).
+	Bold(true).
 	Padding(0, 1)
 
 

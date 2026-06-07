@@ -478,8 +478,8 @@ func (m tuiModel) View() string {
 		for _, e := range m.entries {
 			switch e.role {
 			case "you":
-				content := styles.YouLabelStyle.Render("you: ") + e.text
-				b.WriteString(styles.YouBoxStyle.Render(content) + "\n\n")
+				youWidth := max(min(m.width, 100), 40) - 2
+				b.WriteString(styles.YouBoxStyle.Width(youWidth).Render("you: "+e.text) + "\n\n")
 			case "tool":
 				b.WriteString(styles.BlockToolCallStyle.Render("✓ "+e.text) + "\n\n")
 			case "exec-ok":
