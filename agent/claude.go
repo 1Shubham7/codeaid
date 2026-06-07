@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/1shubham7/codeaid/logger"
 	"github.com/1shubham7/codeaid/tools"
 	"github.com/anthropics/anthropic-sdk-go"
 	tea "github.com/charmbracelet/bubbletea"
@@ -62,8 +63,14 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 
 		var totalIn, totalOut int64
 		var usedTools []ToolCall
+		iteration := 0
+
+		logger.L.Info("agent loop started", "model", model, "messages", len(msgs))
 
 		for {
+			iteration++
+			logger.L.Info("api call", "iteration", iteration, "messages", len(msgs))
+
 			stream := c.Messages.NewStreaming(context.Background(), anthropic.MessageNewParams{
 				Model:     model,
 				MaxTokens: 1024,
@@ -110,11 +117,14 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 			}
 
 			if err := stream.Err(); err != nil {
+				logger.L.Error("stream error", "iteration", iteration, "err", err)
 				return ResponseMsg{Err: err}
 			}
 
 			totalIn += iterIn
 			totalOut += iterOut
+
+			logger.L.Info("api response", "iteration", iteration, "stop_reason", stopReason, "in", iterIn, "out", iterOut)
 
 			// Rebuild the assistant turn in block-index order.
 			indices := make([]int64, 0, len(blocks))
@@ -143,6 +153,7 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 			}
 
 			if stopReason != anthropic.StopReasonToolUse {
+				logger.L.Info("agent loop finished", "total_in", totalIn, "total_out", totalOut, "iterations", iteration)
 				return ResponseMsg{
 					Reply:        replyText.String(),
 					ToolCalls:    usedTools,
@@ -158,7 +169,9 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 			// Dispatch tools and collect results.
 			var resultBlocks []anthropic.ContentBlockParamUnion
 			for _, tc := range toolCalls {
+				logger.L.Info("tool dispatch", "tool", tc.Name, "iteration", iteration)
 				result := tools.Dispatch(tc.Name, tc.Input)
+				logger.L.Info("tool result", "tool", tc.Name, "result_len", len(result))
 				resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(tc.ID, result, false))
 				usedTools = append(usedTools, toolSummary(tc.Name, tc.Input, result))
 			}

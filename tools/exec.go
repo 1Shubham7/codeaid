@@ -8,9 +8,13 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/1shubham7/codeaid/logger"
 )
 
 func executeCode(command string) string {
+	logger.L.Info("execute_code", "command", command)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -31,6 +35,12 @@ func executeCode(command string) string {
 		} else {
 			exitCode = 1
 		}
+	}
+
+	if exitCode == 0 {
+		logger.L.Info("execute_code success", "command", command, "stdout_bytes", stdout.Len())
+	} else {
+		logger.L.Warn("execute_code failed", "command", command, "exit_code", exitCode, "stderr", stderr.String())
 	}
 
 	var sb strings.Builder

@@ -489,7 +489,7 @@ func (m tuiModel) View() string {
 		}
 		if m.state == stateWaiting {
 			if m.streamBuf != "" {
-				b.WriteString("codeaid: " + m.streamBuf + m.spin.View() + "\n\n")
+				b.WriteString("codeaid: " + m.streamBuf + "\n\n")
 			} else {
 				b.WriteString("codeaid: " + m.spin.View() + " thinking...\n\n")
 			}

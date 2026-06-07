@@ -5,13 +5,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/1shubham7/codeaid/logger"
 )
 
 func readFile(path string) string {
+	logger.L.Info("read_file", "path", path)
 	data, err := os.ReadFile(path)
 	if err != nil {
+		logger.L.Error("read_file failed", "path", path, "err", err)
 		return fmt.Sprintf("error reading file: %v", err)
 	}
+	logger.L.Info("read_file success", "path", path, "bytes", len(data))
 	return string(data)
 }
 
@@ -19,8 +24,10 @@ func listDirectory(path string) string {
 	if path == "" {
 		path = "."
 	}
+	logger.L.Info("list_directory", "path", path)
 	entries, err := os.ReadDir(path)
 	if err != nil {
+		logger.L.Error("list_directory failed", "path", path, "err", err)
 		return fmt.Sprintf("error reading directory: %v", err)
 	}
 
@@ -32,6 +39,8 @@ func listDirectory(path string) string {
 			files = append(files, "  "+e.Name())
 		}
 	}
+
+	logger.L.Info("list_directory success", "path", path, "dirs", len(dirs), "files", len(files))
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Directory: %s\n\n", path))
@@ -57,11 +66,15 @@ func listDirectory(path string) string {
 }
 
 func writeFile(path, content string) string {
+	logger.L.Info("write_file", "path", path, "bytes", len(content))
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		logger.L.Error("write_file mkdir failed", "path", path, "err", err)
 		return fmt.Sprintf("error creating directories: %v", err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		logger.L.Error("write_file failed", "path", path, "err", err)
 		return fmt.Sprintf("error writing file: %v", err)
 	}
+	logger.L.Info("write_file success", "path", path, "bytes", len(content))
 	return fmt.Sprintf("successfully wrote %d bytes to %s", len(content), path)
 }

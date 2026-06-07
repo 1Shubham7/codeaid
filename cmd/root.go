@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/1shubham7/codeaid/logger"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
@@ -21,16 +22,17 @@ var rootCmd = &cobra.Command{
 		runTUI()
 	},
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		logger.Init()
 		godotenv.Load()
 		if apiKey == "" {
 			apiKey = os.Getenv("ANTHROPIC_API_KEY")
 		}
-		// apply saved model from config unless --model was explicitly passed
 		if !cmd.Root().PersistentFlags().Changed("model") {
 			if cfg := loadConfig(); cfg.Model != "" {
 				model = cfg.Model
 			}
 		}
+		logger.L.Info("codeaid started", "model", model, "api_key_set", apiKey != "")
 	},
 }
 
