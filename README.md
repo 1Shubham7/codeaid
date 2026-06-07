@@ -152,6 +152,24 @@ codeaid
 | `clear history` | Delete conversation history, start a new session |
 | `exit` | Return to menu |
 
+## Demo
+
+1. run the binary locally
+
+<img width="905" height="505" alt="image" src="https://github.com/user-attachments/assets/c4885674-93a4-4dee-acb8-fd5e371ed694" />
+
+2. select the model you want to use
+
+<img width="905" height="505" alt="image" src="https://github.com/user-attachments/assets/3aec1d48-511f-4aa4-a034-fc5d4a9b82e6" />
+
+3. that's it. you can now go to code and enter what you want to do
+
+<img width="1544" height="835" alt="image" src="https://github.com/user-attachments/assets/21e72ad3-e710-4f4b-ba05-e69c3da6feba" />
+
+4. and you will see, codeaid created a hello-world.py and executed it as well. this is just an example, you can use a capable model and perform your daily coding tasks with codeaid as well.
+
+<img width="1544" height="835" alt="image" src="https://github.com/user-attachments/assets/9132d0c8-254e-4d4e-b7fb-1a4f02cff2bf" />
+
 ## Tools available to Claude
 
 | Tool | Description |
