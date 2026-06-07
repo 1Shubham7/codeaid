@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/1shubham7/codeaid/logger"
+	"github.com/1shubham7/codeaid/tools"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
@@ -27,11 +28,21 @@ var rootCmd = &cobra.Command{
 		if apiKey == "" {
 			apiKey = os.Getenv("ANTHROPIC_API_KEY")
 		}
-		if !cmd.Root().PersistentFlags().Changed("model") {
-			if cfg := loadConfig(); cfg.Model != "" {
-				model = cfg.Model
-			}
+
+		cfg := loadConfig()
+
+		if !cmd.Root().PersistentFlags().Changed("model") && cfg.Model != "" {
+			model = cfg.Model
 		}
+
+		// Seed restricted commands — write defaults into config.json on first run
+		// so the user can inspect and customise the list.
+		if len(cfg.RestrictedCommands) == 0 {
+			cfg.RestrictedCommands = tools.DefaultRestrictedCommands
+			saveConfig(cfg)
+		}
+		tools.SetRestrictedCommands(cfg.RestrictedCommands)
+
 		logger.L.Info("codeaid started", "model", model, "api_key_set", apiKey != "")
 	},
 }

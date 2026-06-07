@@ -3,9 +3,43 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/1shubham7/codeaid/logger"
 	"github.com/anthropics/anthropic-sdk-go"
 )
+
+// DefaultRestrictedCommands is used when the user has not customised the list in config.json.
+var DefaultRestrictedCommands = []string{
+	"rm", "rmdir", "curl", "wget", "ssh", "sudo",
+	"chmod", "chown", "dd", "mkfs", "shutdown", "reboot",
+	"kill", "pkill", "iptables", "nc", "ncat", "netcat",
+	"passwd", "fdisk", "crontab", "at", "nohup",
+}
+
+var restrictedCommands []string
+
+// SetRestrictedCommands is called once at startup from PersistentPreRun.
+func SetRestrictedCommands(cmds []string) {
+	restrictedCommands = cmds
+	logger.L.Info("restricted commands loaded", "count", len(cmds))
+}
+
+// isRestricted returns the matched command name and true if the first token of
+// command is in the restricted list.
+func isRestricted(command string) (string, bool) {
+	first := strings.Fields(command)
+	if len(first) == 0 {
+		return "", false
+	}
+	bin := first[0]
+	for _, r := range restrictedCommands {
+		if r == bin {
+			return bin, true
+		}
+	}
+	return "", false
+}
 
 // Definitions is passed to every API call so Claude knows what tools exist.
 var Definitions = []anthropic.ToolUnionParam{

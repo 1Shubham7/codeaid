@@ -25,7 +25,8 @@ const (
 // --- config ---
 
 type appConfig struct {
-	Model string `json:"model"`
+	Model              string   `json:"model"`
+	RestrictedCommands []string `json:"restricted_commands,omitempty"`
 }
 
 func codeaidDir() string {

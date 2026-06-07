@@ -13,6 +13,12 @@ import (
 )
 
 func executeCode(command string) string {
+	if bin, blocked := isRestricted(command); blocked {
+		msg := fmt.Sprintf("Blocked: '%s' is a restricted command and was not executed.", bin)
+		logger.L.Warn("execute_code blocked", "command", command, "restricted_bin", bin)
+		return msg
+	}
+
 	logger.L.Info("execute_code", "command", command)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
