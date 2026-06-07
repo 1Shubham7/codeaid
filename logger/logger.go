@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -35,4 +36,10 @@ func Init() {
 	}
 
 	L = slog.New(slog.NewJSONHandler(f, nil))
+}
+
+// InitForTesting sets L to a no-op logger that discards all output.
+// Call this from TestMain so tests don't panic on a nil logger.
+func InitForTesting() {
+	L = slog.New(slog.NewJSONHandler(io.Discard, nil))
 }

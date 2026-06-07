@@ -181,6 +181,8 @@ type tuiModel struct {
 func newTUI() tuiModel {
 	ti := textinput.New()
 	ti.CharLimit = 0
+	ti.Prompt = styles.CoolArrow
+	ti.PromptStyle = styles.CoolArrowStyle
 
 	s := spinner.New()
 	s.Spinner = styles.MiddleFinger
@@ -436,7 +438,7 @@ func (m tuiModel) View() string {
 	switch m.state {
 	case stateAPIKey:
 		b.WriteString("No API key found. Enter your Anthropic API key:\n\n")
-		b.WriteString("> " + m.input.View() + "\n")
+		b.WriteString(m.input.View() + "\n")
 
 	case stateMenu:
 		if m.logoStr != "" {
@@ -476,7 +478,8 @@ func (m tuiModel) View() string {
 		for _, e := range m.entries {
 			switch e.role {
 			case "you":
-				b.WriteString("you: " + e.text + "\n\n")
+				content := styles.YouLabelStyle.Render("you: ") + e.text
+				b.WriteString(styles.YouBoxStyle.Render(content) + "\n\n")
 			case "tool":
 				b.WriteString(styles.BlockToolCallStyle.Render("✓ "+e.text) + "\n\n")
 			case "exec-ok":
@@ -484,7 +487,7 @@ func (m tuiModel) View() string {
 			case "exec-err":
 				b.WriteString(styles.ExecErrStyle.Render(e.text) + "\n\n")
 			case "codeaid":
-				b.WriteString("codeaid: " + e.text + "\n\n")
+				b.WriteString(styles.CodaidLabelStyle.Render("codeaid: ") + e.text + "\n\n")
 			case "meta":
 				b.WriteString(e.text + "\n\n")
 			}
@@ -499,8 +502,8 @@ func (m tuiModel) View() string {
 		if m.errMsg != "" {
 			b.WriteString(m.errMsg + "\n\n")
 		}
-		b.WriteString(sep + "\n")
-		b.WriteString("> " + m.input.View())
+		inputWidth := max(min(m.width, 100), 40) - 4 // 4 accounts for border + padding
+		b.WriteString(styles.InputBoxStyle.Width(inputWidth).Render(m.input.View()))
 	}
 
 	return b.String()
