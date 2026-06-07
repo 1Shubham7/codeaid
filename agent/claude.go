@@ -21,6 +21,13 @@ type ToolCall struct {
 	IsError bool   // true when exit code != 0
 }
 
+// IterationMsg is sent to the TUI after each tool-use round-trip in the agentic loop.
+type IterationMsg struct {
+	InputTokens  int64
+	OutputTokens int64
+	StopReason   string
+}
+
 // ResponseMsg is returned to the TUI as a tea.Msg once the full agentic loop completes.
 type ResponseMsg struct {
 	Reply        string
@@ -32,11 +39,13 @@ type ResponseMsg struct {
 	Err          error
 }
 
-// CallAPI runs the agentic loop in a goroutine. It handles tool calls automatically:
-// if Claude returns stop_reason "tool_use", it calls the tool and loops until Claude
-// produces a final text response, then returns ResponseMsg to the TUI.
-func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string) tea.Cmd {
+// CallAPI runs the agentic loop in a goroutine. After each tool-use round-trip it sends
+// an IterationMsg on iterCh so the TUI can show per-call token counts live. The channel
+// is closed when the loop exits, signalling the TUI to stop listening.
+func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string, iterCh chan<- IterationMsg) tea.Cmd {
 	return func() tea.Msg {
+		defer close(iterCh)
+
 		msgs := make([]anthropic.MessageParam, len(messages))
 		copy(msgs, messages)
 
@@ -92,6 +101,13 @@ func CallAPI(c anthropic.Client, messages []anthropic.MessageParam, model string
 				usedTools = append(usedTools, toolSummary(tc.Name, tc.Input, result))
 			}
 			msgs = append(msgs, anthropic.NewUserMessage(resultBlocks...))
+
+			// Notify the TUI about this iteration's token usage.
+			iterCh <- IterationMsg{
+				InputTokens:  resp.Usage.InputTokens,
+				OutputTokens: resp.Usage.OutputTokens,
+				StopReason:   string(resp.StopReason),
+			}
 		}
 	}
 }

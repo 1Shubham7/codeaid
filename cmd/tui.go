@@ -134,6 +134,18 @@ type entry struct {
 	text string
 }
 
+type iterDoneMsg struct{}
+
+func waitForIteration(ch <-chan agent.IterationMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return iterDoneMsg{}
+		}
+		return msg
+	}
+}
+
 type tuiModel struct {
 	state        tuiState
 	cursor       int
@@ -141,6 +153,7 @@ type tuiModel struct {
 	input        textinput.Model
 	spin         spinner.Model
 	logoStr      string
+	iterCh       chan agent.IterationMsg
 	entries      []entry
 	messages     []anthropic.MessageParam
 	historyCount int
@@ -291,9 +304,24 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, anthropic.NewUserMessage(anthropic.NewTextBlock(input)))
 				m.state = stateWaiting
 				m.errMsg = ""
-				return m, tea.Batch(agent.CallAPI(m.client, m.messages, model), m.spin.Tick)
+				m.iterCh = make(chan agent.IterationMsg, 10)
+				return m, tea.Batch(
+					agent.CallAPI(m.client, m.messages, model, m.iterCh),
+					m.spin.Tick,
+					waitForIteration(m.iterCh),
+				)
 			}
 		}
+
+	case agent.IterationMsg:
+		m.entries = append(m.entries, entry{
+			role: "meta",
+			text: fmt.Sprintf("[stop: %s | in: %d | out: %d]", msg.StopReason, msg.InputTokens, msg.OutputTokens),
+		})
+		return m, waitForIteration(m.iterCh)
+
+	case iterDoneMsg:
+		return m, nil
 
 	case spinner.TickMsg:
 		var spinCmd tea.Cmd
@@ -326,14 +354,11 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.entries = append(m.entries, entry{role: "codeaid", text: msg.Reply})
 		m.messages = append(m.messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Reply)))
 		saveHistory(m.messages)
-		if verbose {
-			m.entries = append(m.entries, entry{
-				role: "meta",
-				text: fmt.Sprintf("[model: %s | stop: %s | tokens in: %d, out: %d, total: %d]",
-					msg.ModelUsed, msg.StopReason,
-					msg.InputTokens, msg.OutputTokens, msg.InputTokens+msg.OutputTokens),
-			})
-		}
+		m.entries = append(m.entries, entry{
+			role: "meta",
+			text: fmt.Sprintf("[stop: %s | model: %s | total in: %d | total out: %d | total: %d]",
+				msg.StopReason, msg.ModelUsed, msg.InputTokens, msg.OutputTokens, msg.InputTokens+msg.OutputTokens),
+		})
 	}
 
 	m.input, cmd = m.input.Update(msg)
