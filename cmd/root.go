@@ -35,13 +35,22 @@ var rootCmd = &cobra.Command{
 			model = cfg.Model
 		}
 
-		// Seed restricted commands — write defaults into config.json on first run
-		// so the user can inspect and customise the list.
+		// Seed defaults into config.json on first run so the user can customise them.
+		changed := false
 		if len(cfg.RestrictedCommands) == 0 {
 			cfg.RestrictedCommands = tools.DefaultRestrictedCommands
+			changed = true
+		}
+		if cfg.MaxFileSizeKB == 0 {
+			cfg.MaxFileSizeKB = 100
+			changed = true
+		}
+		if changed {
 			saveConfig(cfg)
 		}
+
 		tools.SetRestrictedCommands(cfg.RestrictedCommands)
+		tools.SetMaxFileSizeKB(cfg.MaxFileSizeKB)
 
 		logger.L.Info("codeaid started", "model", model, "api_key_set", apiKey != "")
 	},

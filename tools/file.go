@@ -11,6 +11,18 @@ import (
 
 func readFile(path string) string {
 	logger.L.Info("read_file", "path", path)
+
+	info, err := os.Stat(path)
+	if err != nil {
+		logger.L.Error("read_file stat failed", "path", path, "err", err)
+		return fmt.Sprintf("error accessing file: %v", err)
+	}
+	if info.Size() > maxFileSizeBytes {
+		limitKB := maxFileSizeBytes / 1024
+		logger.L.Warn("read_file blocked: file too large", "path", path, "size_bytes", info.Size(), "limit_kb", limitKB)
+		return fmt.Sprintf("Blocked: file '%s' is %d KB which exceeds the %d KB limit.", path, info.Size()/1024, limitKB)
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		logger.L.Error("read_file failed", "path", path, "err", err)

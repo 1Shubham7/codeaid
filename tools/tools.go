@@ -18,11 +18,18 @@ var DefaultRestrictedCommands = []string{
 }
 
 var restrictedCommands []string
+var maxFileSizeBytes int64 = 100 * 1024 // 100 KB default
 
 // SetRestrictedCommands is called once at startup from PersistentPreRun.
 func SetRestrictedCommands(cmds []string) {
 	restrictedCommands = cmds
 	logger.L.Info("restricted commands loaded", "count", len(cmds))
+}
+
+// SetMaxFileSizeKB is called once at startup from PersistentPreRun.
+func SetMaxFileSizeKB(kb int) {
+	maxFileSizeBytes = int64(kb) * 1024
+	logger.L.Info("max file size set", "kb", kb)
 }
 
 // isRestricted returns the matched command name and true if the first token of

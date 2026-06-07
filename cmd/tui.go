@@ -27,6 +27,7 @@ const (
 type appConfig struct {
 	Model              string   `json:"model"`
 	RestrictedCommands []string `json:"restricted_commands,omitempty"`
+	MaxFileSizeKB      int      `json:"max_file_size_kb,omitempty"`
 }
 
 func codeaidDir() string {
